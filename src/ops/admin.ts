@@ -1,36 +1,55 @@
-import { createServer, IncomingMessage, Server } from 'node:http';
+import { createServer, IncomingMessage, ServerResponse, Server } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { App } from '../app.js';
-import { dayKey } from '../util/time.js';
+import { Stats } from '../dashboard/stats.js';
+import { dashboardHtml, loginHtml } from '../dashboard/page.js';
 
-const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const safeEq = (a: string, b: string) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); };
+const cookieOf = (req: IncomingMessage, name: string) => (req.headers.cookie ?? '').split(/;\s*/).map((c) => c.split('=')).find(([k]) => k === name)?.[1] ?? '';
+const json = (res: ServerResponse, code: number, body: unknown) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 
-/** Very small protected page + health endpoint (plan §6.11). Also put it behind Cloudflare Access. */
+/** Admin server: the standalone outreach dashboard (separate from the CRM) + JSON API + live stream + /health. Token required for everything except /health. */
 export function startAdmin(app: App, token: string, port: number, host = '127.0.0.1'): Server {
   if (!token || token.length < 24) throw new Error('ADMIN_BASIC_TOKEN must be at least 24 characters');
-  const authed = (req: IncomingMessage) => { const h = req.headers['x-admin-token'] ?? new URL(req.url ?? '/', 'http://x').searchParams.get('t') ?? ''; return safeEq(String(h), token); };
-  return createServer((req, res) => {
+  const stats = new Stats(app.store, app.planner); const store = app.store;
+  const tokenOf = (req: IncomingMessage, url: URL) => String(req.headers['x-admin-token'] ?? decodeURIComponent(cookieOf(req, 'adm')) ?? url.searchParams.get('t') ?? '');
+  const authed = (req: IncomingMessage, url: URL) => safeEq(tokenOf(req, url), token) || safeEq(String(url.searchParams.get('t') ?? ''), token);
+  const days = (url: URL) => { const d = url.searchParams.get('days'); return d === 'all' ? null : Math.max(1, Math.min(365, Number(d) || 30)); };
+  const streams = new Set<ServerResponse>(); let lastVersion = '';
+  const tick = setInterval(() => { if (!streams.size) return; try { const v = stats.version(); if (v !== lastVersion) { lastVersion = v; for (const r of streams) r.write(`data: ${JSON.stringify({ v })}\n\n`); } else for (const r of streams) r.write(': keep-alive\n\n'); } catch { /* ignore */ } }, 2000);
+  const srv = createServer((req, res) => {
     try {
-      const url = new URL(req.url ?? '/', 'http://x');
-      if (url.pathname === '/health') { res.writeHead(200, { 'content-type': 'application/json' }); return void res.end(JSON.stringify({ ok: true, paused: app.store.isPaused(), pending_crm: app.sync.pending() })); } // no secrets, no lead data
-      if (!authed(req)) { res.writeHead(401); return void res.end('unauthorized'); }
-      const store = app.store; const s = store.settings();
+      const url = new URL(req.url ?? '/', 'http://x'); const path = url.pathname;
+      if (path === '/health') return json(res, 200, { ok: true, paused: store.isPaused(), pending_crm: app.sync.pending() }); // no secrets, no lead data
+      if (!authed(req, url)) { if (path.startsWith('/api/')) return json(res, 401, { error: 'unauthorized' }); res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return void res.end(loginHtml()); }
+      if (url.searchParams.get('t') && req.method === 'GET' && !path.startsWith('/api/')) { res.writeHead(303, { 'set-cookie': `adm=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`, location: path === '/' ? '/' : path }); return void res.end(); }
+      if (path === '/api/stream') { res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no' }); res.write(`data: ${JSON.stringify({ v: stats.version() })}\n\n`); streams.add(res); req.on('close', () => streams.delete(res)); return; }
       if (req.method === 'POST') {
-        if (url.pathname === '/pause') store.setPaused(true, 'admin page', 'admin'); else if (url.pathname === '/resume') app.breaker.resume('admin', true); else if (url.pathname === '/mode' && ['off', 'assisted', 'auto'].includes(url.searchParams.get('m') ?? '')) store.setSetting('sendMode', url.searchParams.get('m'), 'admin');
-        res.writeHead(303, { location: '/?t=' + encodeURIComponent(token) }); return void res.end();
+        const q = url.searchParams; const act = path.replace('/api', '');
+        if (act === '/pause') store.setPaused(true, 'dashboard', 'admin');
+        else if (act === '/resume') { const r = app.breaker.resume('admin', app.waStatus() === 'open' || app.sender.mode() === 'off'); if (!r.ok) return json(res, 409, r); }
+        else if (act === '/mode' && ['off', 'assisted', 'auto'].includes(q.get('m') ?? '')) store.setSetting('sendMode', q.get('m'), 'admin');
+        else if (act === '/skip') { if (!app.planner.skipItem(q.get('id') ?? '', 'dashboard_skip')) return json(res, 404, { error: 'not planned' }); }
+        else if (act === '/handled') app.inbox.markHandled(q.get('id') ?? '');
+        else if (act === '/dnc') { const l = store.lead(q.get('lead') ?? ''); if (!l?.phone) return json(res, 404, { error: 'no lead' }); store.addDnc(l.phone, 'dashboard', 'manual'); store.updateLead(l.id, { dnc: true, dnc_reason: 'manual' }, 'admin'); app.inbox.stopSequence(l.id, 'dnc'); }
+        else return json(res, 404, { error: 'unknown action' });
+        if (!path.startsWith('/api/')) { res.writeHead(303, { location: '/' }); return void res.end(); }
+        return json(res, 200, { ok: true });
       }
-      const day = dayKey(store.clock.now(), s.timeZone); const plan = app.planner.ensurePlan(day);
-      const rows = store.db.all("SELECT m.created_at, m.kind, m.state, m.text, m.personal_line, l.name FROM messages m JOIN leads l ON l.id=m.lead_id ORDER BY m.rowid DESC LIMIT 20");
-      const t = encodeURIComponent(token);
-      const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Outreach</title><style>body{font:14px system-ui;max-width:900px;margin:20px auto;padding:0 12px}td,th{border-bottom:1px solid #ddd;padding:4px 8px;text-align:start;vertical-align:top}form{display:inline}</style>
-<h1>Magmafy outreach</h1><p>${store.isPaused() ? '⏸ PAUSED — ' + esc(store.kvGet('pause_reason')) : '▶️ running'} · mode <b>${esc(app.sender.mode())}</b> (setting ${esc(s.sendMode)}) · ready pool ${store.leadsByStatus('message_ready').length}</p>
-<form method="post" action="/pause?t=${t}"><button>Pause</button></form> <form method="post" action="/resume?t=${t}"><button>Resume</button></form> ${['off', 'assisted', 'auto'].map((m) => `<form method="post" action="/mode?m=${m}&t=${t}"><button>${m}</button></form>`).join(' ')}
-<h2>Today ${day} — caps new ${plan.caps.newCap}, follow-ups ${plan.caps.followCap}, warm-up day ${plan.caps.rampIndex}</h2><table>${plan.items.map((i) => `<tr><td>${esc(new Date(i.target_at).toLocaleTimeString('en-GB', { timeZone: s.timeZone }))}</td><td>${esc(store.lead(i.lead_id)?.name)}</td><td>${esc(i.kind)}</td><td>${esc(i.state)}</td></tr>`).join('')}</table>
-<h2>Pending replies</h2><table>${app.inbox.pending(10).map((r) => `<tr><td>${esc(store.lead(r.lead_id)?.name)}</td><td>${esc(r.category)}</td><td>${esc(r.text)}</td></tr>`).join('')}</table>
-<h2>Last 20 messages</h2><table>${rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.kind)} · ${esc(r.state)}</td><td>${esc(r.text)}<br><small>${esc(r.personal_line)}</small></td></tr>`).join('')}</table>
-<h2>Settings</h2><pre>${esc(JSON.stringify(s, null, 1))}</pre>`;
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'x-frame-options': 'DENY', 'cache-control': 'no-store' }); res.end(html);
-    } catch (e) { res.writeHead(500); res.end('error'); }
+      if (path === '/') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'x-frame-options': 'DENY', 'cache-control': 'no-store' }); return void res.end(dashboardHtml()); }
+      if (path === '/api/overview') return json(res, 200, stats.overview(app.waStatus(), app.sender.mode()));
+      if (path === '/api/series') return json(res, 200, stats.series(Math.min(60, Number(url.searchParams.get('days')) || 14)));
+      if (path === '/api/funnel') return json(res, 200, stats.funnel(days(url)));
+      if (path === '/api/results') return json(res, 200, stats.results(days(url)));
+      if (path === '/api/reasons') return json(res, 200, stats.reasons(days(url)));
+      if (path === '/api/quality') return json(res, 200, stats.quality(days(url)));
+      if (path === '/api/leads') return json(res, 200, { ...stats.leads({ text: url.searchParams.get('q') ?? undefined, status: url.searchParams.get('status') ?? undefined, offset: Number(url.searchParams.get('offset')) || 0 }), statuses: stats.statusCounts() });
+      if (path.startsWith('/api/lead/')) { const c = stats.conversation(decodeURIComponent(path.slice(10))); return c ? json(res, 200, c) : json(res, 404, { error: 'not found' }); }
+      if (path === '/api/replies') return json(res, 200, app.inbox.pending(30).map((r) => ({ ...r, lead: store.lead(r.lead_id)?.name })));
+      if (path === '/api/settings') return json(res, 200, store.settings());
+      res.writeHead(404); res.end('not found');
+    } catch (e) { json(res, 500, { error: 'server error' }); }
   }).listen(port, host);
+  srv.on('close', () => clearInterval(tick));
+  return srv;
 }

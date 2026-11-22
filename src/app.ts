@@ -40,6 +40,7 @@ export class App {
     this.alertFn = alert;
   }
   alertFn: (m: string, o?: { urgent?: boolean }) => void;
+  waStatus() { return this.d.wa.status(); }
 
   /** Start-up: wire WhatsApp events, then reconcile any dangling send intent (never a blind retry). */
   async start() {

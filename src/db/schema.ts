@@ -64,5 +64,13 @@ CREATE TABLE spend (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, prov
 CREATE TABLE reminders (id TEXT PRIMARY KEY, lead_id TEXT NOT NULL, due_day TEXT NOT NULL, kind TEXT NOT NULL, draft TEXT, done INTEGER NOT NULL DEFAULT 0);
 ` },
   { id: 2, sql: `ALTER TABLE leads ADD COLUMN crm_id TEXT; ALTER TABLE leads ADD COLUMN crm_cursor_ok INTEGER DEFAULT 0;
-ALTER TABLE crm_outbox ADD COLUMN next_try_at TEXT; ALTER TABLE crm_outbox ADD COLUMN seq INTEGER;` }
+ALTER TABLE crm_outbox ADD COLUMN next_try_at TEXT; ALTER TABLE crm_outbox ADD COLUMN seq INTEGER;` },
+  { id: 3, sql: `CREATE INDEX IF NOT EXISTS messages_wa ON messages(wa_message_id);
+CREATE INDEX IF NOT EXISTS messages_lead_dir ON messages(lead_id, direction, state);
+CREATE INDEX IF NOT EXISTS messages_sent_at ON messages(sent_at);
+CREATE INDEX IF NOT EXISTS leads_first_sent ON leads(first_sent_at);
+CREATE INDEX IF NOT EXISTS leads_phone_idx ON leads(phone);
+CREATE INDEX IF NOT EXISTS events_type ON events(type, id);
+CREATE INDEX IF NOT EXISTS plan_items_lead ON plan_items(lead_id, state);
+CREATE INDEX IF NOT EXISTS outbox_state ON crm_outbox(state, seq);` }
 ];

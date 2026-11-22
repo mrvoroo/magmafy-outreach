@@ -25,18 +25,22 @@ describe('backup + restore drill', () => {
   });
 });
 
-describe('admin page', () => {
-  it('requires the token; /health leaks nothing; pause/resume work; HTML is escaped', async () => {
+describe('admin server', () => {
+  it('requires the token; /health leaks nothing; pause/resume/mode work; the page is static and the data comes as JSON', async () => {
     const w = await world(); await w.app.start(); await w.makeReady(2); await w.app.morning(); const tok = 'x'.repeat(30);
-    w.store.updateLead(w.store.leadsByStatus(['scheduled', 'message_ready'])[0].id, { name: '<script>alert(1)</script>' } as any);
-    const srv = startAdmin(w.app, tok, 0); await new Promise((r) => srv.once('listening', r)); const base = `http://127.0.0.1:${(srv.address() as any).port}`;
+    const srv = startAdmin(w.app, tok, 0); await new Promise((r) => srv.once('listening', r)); const base = `http://127.0.0.1:${(srv.address() as any).port}`; const H = { 'x-admin-token': tok };
     try {
-      expect((await fetch(base + '/')).status).toBe(401); expect((await fetch(base + '/?t=wrong')).status).toBe(401);
-      const h = await (await fetch(base + '/health')).text(); expect(h).not.toContain('<script'); expect(JSON.parse(h).ok).toBe(true);
-      const page = await (await fetch(base + '/?t=' + tok)).text(); expect(page).toContain('Magmafy outreach'); expect(page).not.toContain('<script>alert(1)'); expect(page).not.toContain('SEND_ENABLED');
-      await fetch(base + '/pause?t=' + tok, { method: 'POST', redirect: 'manual' }); expect(w.store.isPaused()).toBe(true);
-      await fetch(base + '/resume?t=' + tok, { method: 'POST', redirect: 'manual' }); expect(w.store.isPaused()).toBe(false);
-      await fetch(base + '/mode?m=off&t=' + tok, { method: 'POST', redirect: 'manual' }); expect(w.store.settings().sendMode).toBe('off');
+      expect((await fetch(base + '/')).status).toBe(401); expect((await fetch(base + '/?t=wrong')).status).toBe(401); expect((await fetch(base + '/api/overview')).status).toBe(401);
+      const h = await (await fetch(base + '/health')).text(); expect(JSON.parse(h)).toEqual({ ok: true, paused: false, pending_crm: expect.any(Number) });
+      const login = await fetch(base + '/?t=' + tok, { redirect: 'manual' }); expect(login.status).toBe(303); expect(login.headers.get('set-cookie')).toMatch(/HttpOnly; SameSite=Strict/);
+      const page = await (await fetch(base + '/', { headers: H })).text(); expect(page).toContain('Magmafy outreach'); expect(page).not.toContain(tok);
+      const js = page.match(/<script>([\s\S]*)<\/script>/)![1]; expect(() => new Function(js)).not.toThrow(); // the dashboard script at least parses
+      const o = await (await fetch(base + '/api/overview', { headers: H })).json(); expect(o.state.paused).toBe(false); expect(o.today.planned.length).toBeGreaterThan(0);
+      await fetch(base + '/api/pause', { method: 'POST', headers: H }); expect(w.store.isPaused()).toBe(true);
+      expect((await (await fetch(base + '/api/overview', { headers: H })).json()).state.paused).toBe(true);
+      await fetch(base + '/pause?t=' + tok, { method: 'POST', redirect: 'manual' }); await fetch(base + '/api/resume', { method: 'POST', headers: H }); expect(w.store.isPaused()).toBe(false);
+      await fetch(base + '/api/mode?m=off', { method: 'POST', headers: H }); expect(w.store.settings().sendMode).toBe('off');
+      expect((await fetch(base + '/api/nope', { headers: H })).status).toBe(404);
     } finally { srv.close(); }
     expect(() => startAdmin(w.app, 'short', 0)).toThrow();
   });
