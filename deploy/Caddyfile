@@ -1,0 +1,6 @@
+# Replace with your subdomain (DNS record in Cloudflare). Protect it ALSO with Cloudflare Access.
+outreach.example.com {
+  encode gzip
+  header { X-Content-Type-Options nosniff; Referrer-Policy no-referrer; -Server }
+  reverse_proxy outreach:8080
+}

@@ -1,0 +1,11 @@
+# Go-live checklist (in order — do not skip)
+- [ ] BLOCKERS B-01…B-08 done (repo, keys, VPS, Telegram, CRM door deployed, number ready).
+- [ ] `npm test` green; restore drill done on a clean machine.
+- [ ] CRM: test lead flagged «تجريبي» pushed + updated repeatedly appears ONCE with right stage/attempts/personal line/exact texts; bot key cannot call anything else (CRM tests prove it; re-check on the real sheet).
+- [ ] Sourcing: `node dist/main.js source` for Riyadh → 120 leads; you review 30 (wrong-number rate, evidence quality).
+- [ ] Golden set with the REAL AI: regenerate `docs/golden-set.md`; ≥90% «send/minor edit», **zero** fabricated claims.
+- [ ] Dry run 2 days (`SEND_ENABLED=false`): read every would-be message (`dry_run_send` events / admin page).
+- [ ] Kill-switch drill from Telegram AND the admin page: nothing sends while paused.
+- [ ] Pair the dedicated number (`/pair`), send tests to your own numbers (`/mode auto` + `SEND_ENABLED=true`), then the live pilot: warm-up 5→12/day, supervised 3 days, breaker armed; compare CRM timeline with WhatsApp.
+- [ ] Legal: confirm Saudi/Gulf cold-B2B/data-protection rules with a local advisor (opt-outs, source logging, export are implemented).
+- [ ] After 100 sends: review reply rate per variant (weekly report), change ONE thing at a time.
