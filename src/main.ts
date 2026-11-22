@@ -43,7 +43,7 @@ async function main() {
 
   await app.start(); if (live) await wa.connect();
   if (tg instanceof HttpTelegram) void tg.poll();
-  if (ready.admin) startAdmin(app, env.ADMIN_BASIC_TOKEN, env.ADMIN_PORT); else log.warn('admin page disabled: set ADMIN_BASIC_TOKEN (≥24 chars)');
+  if (crm instanceof HttpCrm || ready.admin) startAdmin(app, { token: ready.admin ? env.ADMIN_BASIC_TOKEN : undefined, auth: crm instanceof HttpCrm ? crm : undefined }, Number(process.env.PORT ?? env.ADMIN_PORT), process.env.PORT ? '0.0.0.0' : '127.0.0.1'); else log.warn('dashboard disabled: needs CRM_URL + CRM_OUTREACH_KEY (CRM admin sign-in)');
   // scheduler: one tick a minute (+jitter inside the sender), morning job once per local day, summary in the evening, backup nightly
   let lastMorning = '', lastEvening = '', lastBackup = '';
   const loop = async () => {

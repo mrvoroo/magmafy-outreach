@@ -41,6 +41,7 @@ export class App {
   }
   alertFn: (m: string, o?: { urgent?: boolean }) => void;
   waStatus() { return this.d.wa.status(); }
+  get crm() { return this.d.crm; }
 
   /** Start-up: wire WhatsApp events, then reconcile any dangling send intent (never a blind retry). */
   async start() {

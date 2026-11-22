@@ -27,4 +27,5 @@ cd .. && npx vitest run && npx tsc -b && npx eslint src      # CRM side
 > Moved here from Magmafy-CRM-source/outreach-system (B-01 done).
 
 ## Dashboard (B-16) — built, tests green (152)
+Sign-in: CRM admins only — e-mail + the CRM's own emailed code, session 14 days, re-checked against the CRM every 10 min (needs the UPDATED `Outreach.gs` pasted in Apps Script).
 Standalone admin dashboard served by the outreach service at `/` (login with `ADMIN_BASIC_TOKEN`): overview (live via SSE), funnel, results, reasons & analysis, message quality, full per-lead conversations (separate from the CRM; CRM card untouched), control. Demo on fake data: `npx tsx scripts/demo-dashboard.ts`. Speed work: DB indexes done (migration 3); remaining items in `docs/DASHBOARD-AND-SPEED-PLAN.md` §B (timing metrics, batching) — after the Render deploy.

@@ -29,3 +29,10 @@ export interface CrmPort {
 }
 /** An answer from the CRM that says "no, and retrying will not help" (do-not-contact, not our lead…). */
 export class CrmRefusal extends Error { constructor(public code: string) { super('CRM refused: ' + code); } }
+
+/** Dashboard sign-in through the CRM: only ACTIVE CRM ADMINS, with the CRM's own e-mailed code. */
+export interface AdminAuthPort {
+  adminRequestCode(email: string): Promise<void>;
+  adminLogin(email: string, code: string): Promise<{ email: string; name: string }>;
+  adminCheck(email: string): Promise<boolean>;
+}

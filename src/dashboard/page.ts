@@ -1,8 +1,20 @@
 /** The dashboard is ONE self-contained page (no external libraries, no CDN): everything is drawn with safe DOM calls (textContent), RTL Arabic. */
-export function loginHtml(): string {
+export function loginHtml(withCrm = true, withToken = false): string {
   return `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Magmafy outreach — دخول</title>
-<style>body{font:16px system-ui,sans-serif;background:#0f1115;color:#eee;display:grid;place-items:center;height:100vh;margin:0}form{background:#181b22;padding:28px;border-radius:12px;width:min(92vw,360px)}input,button{width:100%;padding:12px;margin-top:12px;border-radius:8px;border:1px solid #333;background:#0f1115;color:#eee;font-size:16px;box-sizing:border-box}button{background:#d4a017;color:#111;border:0;font-weight:700;cursor:pointer}</style>
-<form method="get" action="/"><h2>لوحة نظام الـ Outreach</h2><input name="t" type="password" placeholder="رمز الدخول" autocomplete="current-password" autofocus><button>دخول</button></form></html>`;
+<style>body{font:16px system-ui,sans-serif;background:#0f1115;color:#eee;display:grid;place-items:center;height:100vh;margin:0}.f{background:#181b22;padding:28px;border-radius:12px;width:min(92vw,380px)}input,button{width:100%;padding:12px;margin-top:12px;border-radius:8px;border:1px solid #333;background:#0f1115;color:#eee;font-size:16px;box-sizing:border-box}button{background:#d4a017;color:#111;border:0;font-weight:700;cursor:pointer}#m{color:#e74c3c;min-height:22px;margin-top:10px;font-size:14px}.s{color:#8b93a5;font-size:14px}</style>
+<div class="f"><h2>📊 لوحة نظام الـ Outreach</h2>
+${withCrm ? `<div id="a"><p class="s">ادخل بنفس إيميل الأدمن بتاع الـ CRM، وهيجيلك كود على الإيميل.</p><input id="e" type="email" placeholder="إيميل الأدمن" autocomplete="email" autofocus><button id="b1">ابعت الكود</button></div>
+<div id="c" style="display:none"><p class="s">اكتب الكود اللي وصلك على الإيميل.</p><input id="k" inputmode="numeric" maxlength="6" placeholder="------" autocomplete="one-time-code" style="text-align:center;letter-spacing:8px;font-size:22px"><button id="b2">دخول</button></div><div id="m"></div>` : ''}
+${withToken ? `<form method="get" action="/" style="margin-top:18px"><p class="s">دخول طوارئ:</p><input name="t" type="password" placeholder="رمز الطوارئ"><button>دخول</button></form>` : ''}</div>
+<script>
+const $=s=>document.querySelector(s),m=t=>{$('#m').textContent=t||''};
+async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'حصل خطأ');return j}
+if($('#b1')){let email='';
+$('#b1').onclick=async()=>{m('');email=$('#e').value.trim();if(!email)return;$('#b1').disabled=true;try{await post('/auth/request',{email});$('#a').style.display='none';$('#c').style.display='block';$('#k').focus()}catch(e){m(e.message)}$('#b1').disabled=false};
+$('#e').onkeydown=e=>{if(e.key==='Enter')$('#b1').click()};
+$('#b2').onclick=async()=>{m('');$('#b2').disabled=true;try{await post('/auth/verify',{email,code:$('#k').value.trim()});location.href='/'}catch(e){m(e.message)}$('#b2').disabled=false};
+$('#k').onkeydown=e=>{if(e.key==='Enter')$('#b2').click()}}
+</script></html>`;
 }
 
 export function dashboardHtml(): string {
@@ -24,7 +36,7 @@ input,select{background:#0f1115;color:var(--ink);border:1px solid var(--line);bo
 .cols{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}.spark{display:flex;gap:3px;align-items:flex-end;height:90px}.spark div{flex:1;background:var(--gold);min-height:2px;border-radius:3px 3px 0 0;position:relative}.spark div.r{background:var(--blue)}
 </style>
 <header><h1>📊 Magmafy outreach</h1><span id="live" class="pill"><span class="live"></span>مباشر</span><span id="state" class="pill"></span><span id="mode" class="pill"></span><span id="wa" class="pill"></span><span class="pill" id="clock"></span>
-<span style="margin-inline-start:auto"><select id="range"><option value="1">اليوم</option><option value="7">7 أيام</option><option value="30" selected>30 يوم</option><option value="all">كل الفترة</option></select></span></header>
+<span style="margin-inline-start:auto;display:flex;gap:8px;align-items:center"><a href="/auth/logout" style="color:#8b93a5;font-size:13px">خروج</a><select id="range"><option value="1">اليوم</option><option value="7">7 أيام</option><option value="30" selected>30 يوم</option><option value="all">كل الفترة</option></select></span></header>
 <nav id="tabs"></nav><main id="main">جارِ التحميل…</main>
 <script>
 const TABS=[['overview','نظرة عامة'],['funnel','التقدم'],['results','النتائج'],['reasons','الأسباب والتحليل'],['quality','جودة الرسائل'],['chats','المحادثات'],['control','التحكم']];

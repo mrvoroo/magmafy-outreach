@@ -52,3 +52,29 @@ describe('dashboard statistics (real numbers from the DB)', () => {
     } finally { srv.close(); }
   }, 15000);
 });
+
+describe('dashboard sign-in = CRM admins (e-mail + the CRM\'s emailed code)', () => {
+  it('admin signs in and gets a session; non-admins and wrong codes are refused; no token needed', async () => {
+    const w = await world(); await w.app.start(); const srv = startAdmin(w.app, { auth: w.crm }, 0); await new Promise((r) => srv.once('listening', r)); const base = `http://127.0.0.1:${(srv.address() as any).port}`;
+    const post = (p: string, body: any, h: any = {}) => fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify(body) });
+    try {
+      expect((await fetch(base + '/')).status).toBe(401); const lp = await (await fetch(base + '/')).text(); expect(lp).toContain('إيميل الأدمن'); expect(lp).not.toContain('رمز الطوارئ');
+      expect((await post('/auth/request', { email: 'admin@example.com' })).status).toBe(200);
+      expect((await post('/auth/verify', { email: 'admin@example.com', code: '111111' })).status).toBe(401);
+      expect((await post('/auth/verify', { email: 'sara@example.com', code: '424242' })).status).toBe(401); // not an admin
+      const ok = await post('/auth/verify', { email: 'admin@example.com', code: '424242' }); expect(ok.status).toBe(200); const ck = ok.headers.get('set-cookie')!; expect(ck).toMatch(/HttpOnly; SameSite=Strict/); const cookie = ck.split(';')[0];
+      expect((await fetch(base + '/api/overview', { headers: { cookie } })).status).toBe(200); expect((await fetch(base + '/', { headers: { cookie } })).status).toBe(200);
+      expect((await fetch(base + '/api/overview')).status).toBe(401);
+      // access is re-checked against the CRM: remove the admin there → locked out after the re-check window
+      w.crm.admins.delete('admin@example.com'); w.store.db.run("UPDATE admin_sessions SET checked_at='2000-01-01T00:00:00Z'");
+      expect((await fetch(base + '/api/overview', { headers: { cookie } })).status).toBe(401);
+      w.crm.admins.set('admin@example.com', 'Admin'); const again = await post('/auth/verify', { email: 'admin@example.com', code: '424242' }); const c2 = again.headers.get('set-cookie')!.split(';')[0];
+      await fetch(base + '/auth/logout', { headers: { cookie: c2 }, redirect: 'manual' }); expect((await fetch(base + '/api/overview', { headers: { cookie: c2 } })).status).toBe(401);
+      // CRM down during a re-check does not lock an admin out
+      const third = await post('/auth/verify', { email: 'admin@example.com', code: '424242' }); const c3 = third.headers.get('set-cookie')!.split(';')[0]; w.store.db.run("UPDATE admin_sessions SET checked_at='2000-01-01T00:00:00Z'"); w.crm.down = true;
+      expect((await fetch(base + '/api/overview', { headers: { cookie: c3 } })).status).toBe(200); w.crm.down = false;
+      for (let i = 0; i < 12; i++) await post('/auth/verify', { email: 'admin@example.com', code: '000000' }); expect((await post('/auth/verify', { email: 'admin@example.com', code: '424242' })).status).toBe(429); // rate limit
+    } finally { srv.close(); }
+    expect(() => startAdmin(w.app, {}, 0)).toThrow();
+  });
+});

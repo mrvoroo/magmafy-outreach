@@ -18,7 +18,7 @@
 
 ## Steps for Ashraf (tonight, in order)
 1. Render account → New → Blueprint → connect `mrvoroo/magmafy-outreach`.
-2. Paste env vars (names in `.env.example`): `CRM_URL`, `CRM_OUTREACH_KEY`, `GOOGLE_PLACES_API_KEY`, `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `ADMIN_BASIC_TOKEN`, `BACKUP_PASSPHRASE`. Leave `SEND_ENABLED=false` (dry run) until the GO-LIVE checklist is done.
+2. Paste env vars (names in `.env.example`): `CRM_URL`, `CRM_OUTREACH_KEY`, `GOOGLE_PLACES_API_KEY`, `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `BACKUP_PASSPHRASE` (no dashboard password: sign-in = CRM admin e-mail + the CRM's emailed code; `ADMIN_BASIC_TOKEN` is optional emergency access). Leave `SEND_ENABLED=false` (dry run) until the GO-LIVE checklist is done.
 3. Deploy → open `/health` → Telegram `/status`.
 4. Then follow `docs/GO-LIVE.md` (sourcing, dry-run days, pairing, pilot).
 

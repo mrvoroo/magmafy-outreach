@@ -1,9 +1,13 @@
-import { CrmPort, CrmView, CrmControl, UpsertArgs, OutboundArgs, InboundArgs, OutcomeArgs, ChangesResult, CrmRefusal } from './contract.js';
+import { CrmPort, AdminAuthPort, CrmView, CrmControl, UpsertArgs, OutboundArgs, InboundArgs, OutcomeArgs, ChangesResult, CrmRefusal } from './contract.js';
 import { RetryableError } from '../util/errors.js';
 
 interface FLead { id: string; placeId: string; phone: string; business: string; stage: string; owner: string; dnc: boolean; attempts: number; ours: boolean; client: boolean; updated: number; personalLine?: string; variant?: string; log: { dir: 'out' | 'in'; ref: string; text: string; kind?: string }[] }
 /** In-memory CRM that mirrors the real door's rules (Outreach.gs): idempotent refs, attempts cap 4, stage mapping, ownership. */
-export class FakeCrm implements CrmPort {
+export class FakeCrm implements CrmPort, AdminAuthPort {
+  admins = new Map<string, string>([['admin@example.com', 'Admin']]); adminCode = '424242';
+  async adminRequestCode(_e: string) { this.guard('adminRequestCode'); }
+  async adminLogin(email: string, code: string) { this.guard('adminLogin'); const n = this.admins.get(email.toLowerCase()); if (!n || code !== this.adminCode) throw new CrmRefusal('الكود غلط أو انتهى، اطلب كود جديد'); return { email: email.toLowerCase(), name: n }; }
+  async adminCheck(email: string) { this.guard('adminCheck'); return this.admins.has(email.toLowerCase()); }
   leads = new Map<string, FLead>();
   down = false; calls: string[] = []; private seq = 0; private t = 1;
   private view(l: FLead): CrmView { return { found: true, leadId: l.id, stage: l.stage, owner: l.owner, dnc: l.dnc, isClient: l.client, attempts: l.attempts, ours: l.ours, updated: String(l.updated) } as CrmView; }

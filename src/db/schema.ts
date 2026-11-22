@@ -72,5 +72,6 @@ CREATE INDEX IF NOT EXISTS leads_first_sent ON leads(first_sent_at);
 CREATE INDEX IF NOT EXISTS leads_phone_idx ON leads(phone);
 CREATE INDEX IF NOT EXISTS events_type ON events(type, id);
 CREATE INDEX IF NOT EXISTS plan_items_lead ON plan_items(lead_id, state);
-CREATE INDEX IF NOT EXISTS outbox_state ON crm_outbox(state, seq);` }
+CREATE INDEX IF NOT EXISTS outbox_state ON crm_outbox(state, seq);` },
+  { id: 4, sql: `CREATE TABLE admin_sessions (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, checked_at TEXT NOT NULL);` }
 ];
