@@ -17,3 +17,4 @@ Everything else is built and tested with fakes. Nothing below stops the build; e
 | B-13 | Confirm Gulf cold-B2B / data-protection rules with a local advisor. | Legal |
 | B-14 | Live pilot items that cannot be tested without the real number: see `docs/RUNBOOK.md` «Pilot checks». | Pilot sign-off |
 | B-15 | Hosting decision: **Render** (Starter web service + persistent disk). Plan in `docs/RENDER-PLAN.md`; Claude implements the config tonight when Ashraf says go. | Replaces the VPS step B-06 |
+| B-16 | After the Render deploy: build the standalone admin dashboard + speed work — plan in `docs/DASHBOARD-AND-SPEED-PLAN.md` (waits for Ashraf's go). | Visibility |
