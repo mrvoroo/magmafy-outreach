@@ -87,3 +87,12 @@ describe('follow-ups', () => {
     for (const l of w.store.allLeads()) { const sent = w.store.messagesOf(l.id).filter((m) => m.direction === 'out' && m.state === 'sent'); expect(new Set(sent.map((m) => m.kind)).size).toBe(sent.length); }
   });
 });
+
+describe('assisted mode: /replied records an answer you got on your phone', () => {
+  it('stops the sequence, classifies and alerts exactly like a real inbound', async () => {
+    const w = await world(); await w.app.start(); await w.makeReady(2); await w.app.morning(); await w.runDay(); const lead = w.store.allLeads().find((l) => l.status === 'first_message_sent')!;
+    expect(await w.app.bot.handle('/replied nobody | hi', 'owner')).toContain('No sent lead'); expect(await w.app.bot.handle('/replied', 'owner')).toContain('Usage');
+    const r = await w.app.bot.handle(`/replied ${lead.name.slice(0, 6)} | كم السعر؟`, 'owner'); expect(r).toContain('price'); expect(w.store.lead(lead.id)!.status).toBe('replied');
+    expect(await w.app.bot.handle('/replied x | y', 'stranger')).toBeNull();
+  });
+});

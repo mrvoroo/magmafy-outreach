@@ -50,10 +50,15 @@ export class ControlBot {
       case '/handled': this.d.inbox.markHandled(arg); return 'Marked handled.';
       case '/send': { const r = await this.d.sender.sendReply(arg, 'owner'); if (r.ok) this.d.inbox.markHandled(String(store.db.get("SELECT id FROM messages WHERE id=?", arg)?.id)); return r.ok ? '✅ Sent.' : `Not sent: ${r.reason}`; }
       case '/draft': { /* /draft <inboundMessageId> → turns the suggested reply into a sendable reply message */ const rc = store.db.get('SELECT rc.*, m.lead_id FROM reply_class rc JOIN messages m ON m.id=rc.message_id WHERE rc.message_id=?', arg); if (!rc?.suggested) return 'No suggested reply.'; const { msg } = store.createMessage({ lead_id: rc.lead_id, kind: 'reply', text: rc.suggested, state: 'ready' }); return `Draft ready: /send ${msg.id}`; }
+      case '/replied': { // assisted mode: WhatsApp is on your phone, so tell the system what the client answered:  /replied <name or phone> | <their text>
+        const [who, ...t] = arg.split('|'); const text = t.join('|').trim(); if (!who.trim() || !text) return 'Usage: /replied <name or phone> | <what they wrote>';
+        const q = who.trim().toLowerCase(); const lead = store.allLeads().find((l) => l.first_sent_at && (l.name.toLowerCase().includes(q) || (l.phone ?? '').replace(/\D/g, '').endsWith(q.replace(/\D/g, '')) && /\d{5,}/.test(q)));
+        if (!lead?.phone) return 'No sent lead matches that name/phone.';
+        const r = await this.d.inbox.handle({ id: 'manual-' + Date.now(), from: lead.phone.replace(/\D/g, ''), jid: '', text, kind: 'text', at: store.now() }); return r.matched ? `Recorded reply from «${lead.name}» (${r.category}). Follow-ups stopped.` : 'Not recorded.'; }
       case '/done': return this.d.sender.confirmAssisted(arg) ? '✅ Recorded as sent.' : 'Nothing to confirm.';
       case '/report': return buildDailySummary(store, planner.today());
       case '/pair': { if (!this.d.pair) return 'Pairing is not available.'; const p = normalizePhone(arg, s.country); if (!p) return 'Usage: /pair +9665XXXXXXXX (the dedicated outreach number)'; return `Pairing code (enter in WhatsApp → Linked devices → Link with phone number): ${await this.d.pair(p.digits)}`; }
-      case '/help': case '/start': return '/status /pause /resume /mode off|assisted|auto /skip <name> /dnc <phone> /tomorrow /replies /handled <id> /draft <id> /send <id> /done <id> /report /pair <phone>';
+      case '/help': case '/start': return '/status /pause /resume /mode off|assisted|auto /skip <name> /dnc <phone> /tomorrow /replies /handled <id> /draft <id> /send <id> /done <id> /replied <name> | <text> /report /pair <phone>';
       default: return null;
     }
   }

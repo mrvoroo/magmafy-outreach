@@ -32,16 +32,17 @@ async function main() {
   const tg = ready.telegram ? new HttpTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_OWNER_ID) : new FakeTelegram();
   const crm = ready.crm ? new HttpCrm(env.CRM_URL, env.CRM_OUTREACH_KEY) : new FakeCrm();
   const live = env.SEND_ENABLED && ready.crm; // live WhatsApp only if the switch is on AND the CRM mirror exists
-  const wa = live ? new BaileysWhatsApp(env.AUTH_STATE_DIR, log) : new FakeWhatsApp();
+  // WhatsApp automation (Baileys) is used ONLY in sendMode=auto (restart after switching). In assisted mode nothing connects to WhatsApp: you send by hand.
+  const autoWa = live && s.sendMode === 'auto'; const wa = autoWa ? new BaileysWhatsApp(env.AUTH_STATE_DIR, log) : new FakeWhatsApp();
   const ai = ready.ai ? new AnthropicAi(env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL, guardA) : new OfflineAi();
   const places = ready.places ? new GooglePlaces(env.GOOGLE_PLACES_API_KEY, guardG) : undefined;
-  const app = new App({ store, crm, wa, ai, tg, env: { ...process.env, SEND_ENABLED: live ? 'true' : 'false' } as Record<string, string | undefined>, places, web: new PoliteWeb(), log, pair: live ? (d) => (wa as BaileysWhatsApp).requestPairingCode(d) : undefined });
+  const app = new App({ store, crm, wa, ai, tg, env: { ...process.env, SEND_ENABLED: live ? 'true' : 'false' } as Record<string, string | undefined>, places, web: new PoliteWeb(), log, pair: autoWa ? (d) => (wa as BaileysWhatsApp).requestPairingCode(d) : undefined });
 
   const cmd = process.argv[2];
   if (cmd === 'source') { if (!app.sourcer) throw new Error('GOOGLE_PLACES_API_KEY is not set'); const c = s.targetCities[0]; const r = await app.sourcer.run({ city: c.city, cityAr: c.cityAr, country: c.country, target: 120 }); log.info('source done', r); return; }
   if (cmd === 'morning') { log.info('morning', await app.morning()); return; }
 
-  await app.start(); if (live) await wa.connect();
+  await app.start(); if (autoWa) await wa.connect();
   if (tg instanceof HttpTelegram) void tg.poll();
   if (crm instanceof HttpCrm || ready.admin) startAdmin(app, { token: ready.admin ? env.ADMIN_BASIC_TOKEN : undefined, auth: crm instanceof HttpCrm ? crm : undefined }, Number(process.env.PORT ?? env.ADMIN_PORT), process.env.PORT ? '0.0.0.0' : '127.0.0.1'); else log.warn('dashboard disabled: needs CRM_URL + CRM_OUTREACH_KEY (CRM admin sign-in)');
   // scheduler: one tick a minute (+jitter inside the sender), morning job once per local day, summary in the evening, backup nightly
