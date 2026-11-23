@@ -1,3 +1,5 @@
+> **Archived (Nov 2026).** Outreach now lives inside the Magmafy CRM as «جلب العملاء» (`backend/Outreach.gs` + `#/outreach` in `mrvoroo/Magmafy-CRM-source`, see `docs/OUTREACH.md` there), following the `ahmadzz-leads-magnat` skill: **manual sending only**, with spread-out reminders from the CRM, and no separate server. The automatic WhatsApp sender (Baileys) below is no longer used. This repository is kept for reference (sourcing, planner and classifier ideas were ported).
+
 # Magmafy Outreach System
 Automatic, personal, honest WhatsApp outreach for furniture / decor / interior-furnishing businesses in the Gulf; every lead and message mirrors into the Magmafy CRM. Spec: `Magmafy_Outreach_System_Plan.md`. State of the build: `PROGRESS.md`. What needs a human: `BLOCKERS.md`.
 
